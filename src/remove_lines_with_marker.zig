@@ -19,7 +19,7 @@ pub fn removeMarkedLines(
     var list = std.ArrayList(u8).init(allocator);
     defer list.deinit();
 
-    // Normalize CRLF to LF so we can split uniformly
+    // Normalize CRLF to LF
     const normalized = try std.mem.replaceOwned(u8, allocator, buffer, "\r\n", "\n");
     defer allocator.free(normalized);
 
