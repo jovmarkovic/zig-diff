@@ -9,7 +9,7 @@ A simple command-line diff tool written in [Zig](https://ziglang.org/) that comp
 - Compare two text files line-by-line.
 - Supports ignoring lines starting with a custom marker (e.g., comments).
 - Optionally skip empty or whitespace-only lines.
-- Outputs differences using standard diff notation -for now only (`c`).
+- Outputs differences using standard diff notation - for now only (`c`).
 - Prints clear, human-readable diff output.
 - Minimal dependencies — just Zig standard library.
 
@@ -31,11 +31,14 @@ zig run src/main.zig -- [options] <file1> <file2>
 
 ### Options
 
-* `-m`, `--marker <text>`
-  Remove lines starting with this marker (quotes allowed). Useful for ignoring comments or special lines.
+* `-m "#"`, `--marker '//'`
+  Remove lines starting with specific marker - (double) quotes optional.
 
 * `-s`, `--skip-empty`
   Skip empty or whitespace-only lines from comparison.
+
+* `-p`, `--print`
+  Prints the output of two files with optional processing and skips comparison.
 
 * `-h`, `--help`
   Show usage information.
@@ -48,8 +51,8 @@ zig run src/main.zig -- [options] <file1> <file2>
 # Compare two files normally
 zig run src/main.zig -- testfile1 testfile2
 
-# Ignore lines starting with '#'
-zig run src/main.zig -- -m '#' testfile1 testfile2
+# Ignore lines starting with "#"
+zig run src/main.zig -- -m "#" testfile1 testfile2
 
 # Ignore empty lines and lines starting with '//'
 zig run src/main.zig -- -m '//' -s testfile1 testfile2
