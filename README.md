@@ -1,4 +1,3 @@
-````markdown
 # zdif
 
 A simple command-line diff tool written in [Zig](https://ziglang.org/) that compares two text files and outputs their differences in a format similar to the classic Unix `diff` utility.
@@ -85,9 +84,6 @@ Bug reports and feature requests are welcome!
 For questions or help, please open an issue or contact the author.
 
 ```
-
----
-
-Would you like me to help you create a `LICENSE` file too?
+miagi@vivaldi.net
 ```
 
