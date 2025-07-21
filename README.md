@@ -9,7 +9,7 @@ A simple command-line diff tool written in [Zig](https://ziglang.org/) that comp
 - Compare two text files line-by-line.
 - Supports ignoring lines starting with a custom marker (e.g., comments).
 - Optionally skip empty or whitespace-only lines.
-- Outputs differences using standard diff notation (`c`, `a`, `d`).
+- Outputs differences using standard diff notation -for now only (`c`).
 - Prints clear, human-readable diff output.
 - Minimal dependencies — just Zig standard library.
 
