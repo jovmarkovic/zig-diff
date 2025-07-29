@@ -1,6 +1,6 @@
 # zdif
 
-A simple command-line diff tool written in [Zig](https://ziglang.org/) that compares two text files and outputs their differences in a format similar to the classic Unix `diff` utility.
+A simple command-line diff tool written in [Zig](https://ziglang.org/) that compares two text files using Myers' Diff algorithm, outputs their differences via backtracking in a format similar to the GNU `diff` utility.
 
 ---
 
@@ -9,7 +9,7 @@ A simple command-line diff tool written in [Zig](https://ziglang.org/) that comp
 - Compare two text files line-by-line.
 - Supports ignoring lines starting with a custom marker (e.g., comments).
 - Optionally skip empty or whitespace-only lines.
-- Outputs differences using standard diff notation - for now only (`c`).
+- Outputs differences using standard diff notation - (`c`, `a`, `d`).
 - Prints clear, human-readable diff output.
 - Minimal dependencies — just Zig standard library.
 
