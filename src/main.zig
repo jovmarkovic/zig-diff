@@ -12,6 +12,8 @@ const help_msg =
     \\  -m "#", --marker '//'  Remove lines starting with this marker - (double) quotes not mandatory
     \\  -s, --skip-empty       Remove empty lines from comparison
     \\  -p, --print            Prints the files without comparison
+    \\  -n, --normal           Sets diffing mode to normal (default)
+    \\  -u, --unified          Sets diffing mode to unified
     \\  -h, --help             Show this help message
     \\
 ;
@@ -30,6 +32,7 @@ pub fn main() !void {
     var marker_flag = false;
     var skip_flag = false;
     var print_only = false;
+    var mode: []const u8 = "normal";
 
     // Parse CLI flags
     var i: usize = 1;
@@ -45,6 +48,12 @@ pub fn main() !void {
             i += 2;
         } else if (std.mem.eql(u8, arg, "-s") or std.mem.eql(u8, arg, "--skip-empty")) {
             skip_flag = true;
+            i += 1;
+        } else if (std.mem.eql(u8, arg, "-n") or std.mem.eql(u8, arg, "--normal")) {
+            mode = "normal";
+            i += 1;
+        } else if (std.mem.eql(u8, arg, "-u") or std.mem.eql(u8, arg, "--unified")) {
+            mode = "unified";
             i += 1;
         } else if (std.mem.eql(u8, arg, "-p") or std.mem.eql(u8, arg, "--print")) {
             print_only = true;
@@ -94,5 +103,12 @@ pub fn main() !void {
     );
     defer trace.deinit();
 
-    try trackDiff(allocator, trace, cleaned1, cleaned2, &eql_ctx, helpers.eql, true);
+    try trackDiff(
+        allocator,
+        trace,
+        cleaned1,
+        cleaned2,
+        mode,
+        true,
+    );
 }

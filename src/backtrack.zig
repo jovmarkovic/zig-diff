@@ -1,9 +1,10 @@
 const std = @import("std");
 const DiffAlgo = @import("diff_algo.zig");
 const DiffPrinter = @import("print_diff.zig").DiffPrinter;
+const DiffMode = @import("print_diff.zig").DiffMode;
 
 /// Represents the type of edit operation in the diff.
-const Operation = enum {
+pub const Operation = enum {
     Keep, // Lines are identical in both sequences (no change).
     Insert, // Lines inserted in the new sequence.
     Delete, // Lines deleted from the original sequence.
@@ -43,19 +44,29 @@ pub fn trackDiff(
     trace: std.ArrayList([]usize), // Trace from Myers algorithm: snapshots of vectors 'v' at each step
     a: []const []const u8, // Original sequence of lines
     b: []const []const u8, // New sequence of lines
-    ctx: ?*anyopaque,
-    compare: fn (ctx: ?*anyopaque, usize, usize) bool, // Comparison function for elements of a and b
+    mode: []const u8, // diff mode
     printDiff: bool, // Whether to print the diff after calculation
 ) !void {
-    // offset is used to translate from k (diagonal index) to array index in v
+    // Sets printing mode
+    var diffMode: DiffMode = undefined;
+    if (std.mem.eql(u8, mode, "normal")) {
+        diffMode = DiffMode.Normal;
+    } else if (std.mem.eql(u8, mode, "unified")) {
+        diffMode = DiffMode.Unified;
+    } else {
+        std.debug.print("UNKNOWN DIFF MODE SPECIFIED!!!\n", .{});
+        return;
+    }
+
+    // Offset is used to translate from k (diagonal index) to array index in v
     const offset: isize = @intCast(a.len + b.len);
 
     // Start backtracking from the last trace snapshot (furthest step)
     var d = trace.items.len - 1;
 
     // x and y represent current coordinates in the edit graph (indices into a and b)
-    var x = a.len;
-    var y: isize = @intCast(b.len);
+    var x = a.len - 1;
+    var y: isize = @intCast(b.len - 1);
 
     // Variables to hold previous diagonal and coordinates during backtracking
     var prev_k: isize = 0;
@@ -93,10 +104,11 @@ pub fn trackDiff(
         prev_y = @as(isize, @intCast(prev_x)) - prev_k;
 
         // Follow diagonal moves (Keep operations) as long as a[x-1] == b[y-1]
-        while (x > prev_x and y > prev_y and compare(ctx, x - 1, @as(usize, @intCast(y)) - 1)) {
+        while (x > prev_x and y > prev_y) {
+            // Keep operation means lines are equal and unchanged
             x -= 1;
             y -= 1;
-            // Keep operation means lines are equal and unchanged
+
             try diffs.append(.{
                 .op = Operation.Keep,
                 .orig_line = x,
@@ -138,8 +150,7 @@ pub fn trackDiff(
 
     if (printDiff) {
         // Initialize DiffPrinter to format and print
-        var printer = DiffPrinter.init(allocator, a, b);
-        defer printer.deinit();
+        var printer = DiffPrinter.init(allocator, a, b, diffMode);
 
         try printer.print(diffs.items);
     }

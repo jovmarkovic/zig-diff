@@ -42,11 +42,13 @@ pub fn readTwoFiles(
     path2: []const u8,
 ) !FileBuffers {
     const file1 = try std.fs.cwd().openFile(path1, .{ .mode = .read_only });
-    const size1 = try file1.stat().size;
+    const stat1 = try file1.stat();
+    const size1 = stat1.size;
     defer file1.close();
 
     const file2 = try std.fs.cwd().openFile(path2, .{ .mode = .read_only });
-    const size2 = try file2.stat().size;
+    const stat2 = try file2.stat();
+    const size2 = stat2.size;
     defer file2.close();
 
     const buf1 = try file1.readToEndAlloc(allocator, size1);
