@@ -28,10 +28,10 @@ pub fn removeMarkedLines(
     var lines_out = std.ArrayList([]const u8).init(allocator);
     defer lines_out.deinit();
 
-    for (lines_in) |line| {
+    for (lines_in, 0..) |line, i| {
         const trimmed_left = std.mem.trimLeft(u8, line, " \t");
 
-        if (skipEmptyLines and std.mem.trim(u8, line, " \t").len == 0) {
+        if (skipEmptyLines and i != lines_in.len - 1 and std.mem.trim(u8, line, " \t").len == 0) {
             continue;
         }
 

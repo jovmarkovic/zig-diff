@@ -1,4 +1,4 @@
-# zdif
+# zgdif
 
 A simple command-line diff tool written in [Zig](https://ziglang.org/) that compares two text files using Myers' Diff algorithm, outputs their differences via backtracking in a format similar to the GNU `diff` utility.
 
@@ -34,6 +34,9 @@ zig run src/main.zig -- [options] <file1> <file2>
 * `--normal`
   GNU normal diff style. (DEFAULT)
 
+* `--color`
+  Applies colors to diff output if stdout is TTY.
+
 * `-m "#"`, `--marker '//'`
   Remove lines starting with specific marker - (double) quotes optional.
 
@@ -44,7 +47,8 @@ zig run src/main.zig -- [options] <file1> <file2>
   GNU unified diff style (default 3) lines of context with hunk merging. - WIP
 
 * `-p`, `--print`
-  Prints the output of two files with optional processing and skips comparison.
+  Prints the output of two files with optional processing and skips comparison;
+    includes header with filename and EOF footer, if stdout is not TTY, remove colors.
 
 * `-h`, `--help`
   Show usage information.

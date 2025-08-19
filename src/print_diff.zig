@@ -1,4 +1,5 @@
 const std = @import("std");
+const Printer = @import("helpers.zig").Printer;
 const DiffOp = @import("backtrack.zig").DiffOp;
 const Operation = @import("backtrack.zig").Operation;
 
@@ -21,10 +22,11 @@ const UnifiedLine = struct {
 /// either unified or normal format.
 pub const DiffPrinter = struct {
     allocator: std.mem.Allocator, // memory allocator
-    stdout: std.fs.File.Writer, // output writer (usually stdout)
+    //stdout: std.fs.File.Writer, // output writer (usually stdout)
     a: []const []const u8, // original file lines
     b: []const []const u8, // new file lines
     mode: DiffMode, // chosen diff printing mode
+    printer: *Printer,
 
     /// Initialize a new printer instance.
     pub fn init(
@@ -32,13 +34,15 @@ pub const DiffPrinter = struct {
         a: []const []const u8,
         b: []const []const u8,
         mode: DiffMode,
+        printer: *Printer,
     ) DiffPrinter {
         return DiffPrinter{
             .allocator = allocator,
-            .stdout = std.io.getStdOut().writer(),
+            //.stdout = std.io.getStdOut().writer(),
             .a = a,
             .b = b,
             .mode = mode,
+            .printer = printer,
         };
     }
 
@@ -160,7 +164,7 @@ pub const DiffPrinter = struct {
         }
 
         // Print hunk header.
-        try self.stdout.print("@@ -{d},{d} +{d},{d} @@\n", .{ orig_start, orig_len, new_start, new_len });
+        try self.printer.printHeader("@@ -{d},{d} +{d},{d} @@\n", .{ orig_start, orig_len, new_start, new_len });
 
         // Print hunk lines with prefixes: ' ' (Keep), '-' (Delete), '+' (Insert).
         for (buffer) |entry| {
@@ -169,12 +173,21 @@ pub const DiffPrinter = struct {
                 .Delete => self.a[entry.op.orig_line],
                 .Insert => self.b[@as(usize, @intCast(entry.op.new_line))],
             };
-            const prefix: u8 = switch (entry.op.op) {
-                .Keep => ' ',
-                .Delete => '-',
-                .Insert => '+',
+            const prefix: []const u8 = switch (entry.op.op) {
+                .Keep => " ",
+                .Delete => "-",
+                .Insert => "+",
             };
-            try self.stdout.print("{c}{s}\n", .{ prefix, line });
+            //try self.std.print("{c}{s}\n", .{ prefix, line });
+            try self.printer.printLine(
+                prefix,
+                line,
+                switch (prefix[0]) {
+                    '+' => self.printer.colors.insert,
+                    '-' => self.printer.colors.delete,
+                    else => self.printer.colors.reset,
+                },
+            );
         }
     }
 
@@ -259,27 +272,35 @@ pub const DiffPrinter = struct {
         defer self.allocator.free(new_range);
 
         // Print command header line.
-        try self.stdout.print("{s}{s}{s}\n", .{ orig_range, cmd, new_range });
+        try self.printer.printHeader("{s}{s}{s}\n", .{ orig_range, cmd, new_range });
 
         // Print deleted lines (<) for delete/change
         if (std.mem.eql(u8, cmd, "d") or std.mem.eql(u8, cmd, "c")) {
             for (ops) |op| {
                 if (op.op == .Delete) {
-                    try self.stdout.print("< {s}\n", .{self.a[op.orig_line]});
+                    try self.printer.printLine(
+                        "< ",
+                        self.a[op.orig_line],
+                        self.printer.colors.delete,
+                    );
                 }
             }
         }
 
         // Print separator for change
         if (std.mem.eql(u8, cmd, "c")) {
-            try self.stdout.print("---\n", .{});
+            try self.printer.printRaw("---\n", .{});
         }
 
         // Print inserted lines (>) for add/change
         if (std.mem.eql(u8, cmd, "a") or std.mem.eql(u8, cmd, "c")) {
             for (ops) |op| {
                 if (op.op == .Insert) {
-                    try self.stdout.print("> {s}\n", .{self.b[@as(usize, @intCast(op.new_line))]});
+                    try self.printer.printLine(
+                        "> ",
+                        self.b[@as(usize, @intCast(op.new_line))],
+                        self.printer.colors.insert,
+                    );
                 }
             }
         }

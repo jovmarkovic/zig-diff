@@ -1,4 +1,5 @@
 const std = @import("std");
+const helpers = @import("helpers.zig");
 const DiffAlgo = @import("diff_algo.zig");
 const DiffPrinter = @import("print_diff.zig").DiffPrinter;
 const DiffMode = @import("print_diff.zig").DiffMode;
@@ -45,14 +46,15 @@ pub fn trackDiff(
     a: []const []const u8, // Original sequence of lines
     b: []const []const u8, // New sequence of lines
     mode: []const u8, // diff mode
-    printDiff: bool, // Whether to print the diff after calculation
+    printer: *helpers.Printer,
+    print_diff: bool, // Whether to print the diff after calculation
 ) !void {
     // Sets printing mode
-    var diffMode: DiffMode = undefined;
+    var diff_mode: DiffMode = undefined;
     if (std.mem.eql(u8, mode, "normal")) {
-        diffMode = DiffMode.Normal;
+        diff_mode = DiffMode.Normal;
     } else if (std.mem.eql(u8, mode, "unified")) {
-        diffMode = DiffMode.Unified;
+        diff_mode = DiffMode.Unified;
     } else {
         std.debug.print("UNKNOWN DIFF MODE SPECIFIED!!!\n", .{});
         return;
@@ -148,10 +150,16 @@ pub fn trackDiff(
     // reverse to restore normal chronological order
     std.mem.reverse(DiffOp, diffs.items);
 
-    if (printDiff) {
+    if (print_diff) {
         // Initialize DiffPrinter to format and print
-        var printer = DiffPrinter.init(allocator, a, b, diffMode);
+        var diffPrinter = DiffPrinter.init(
+            allocator,
+            a,
+            b,
+            diff_mode,
+            printer,
+        );
 
-        try printer.print(diffs.items);
+        try diffPrinter.print(diffs.items);
     }
 }

@@ -9,14 +9,23 @@ const help_msg =
     \\Usage: {s} [options] <file1> <file2>
     \\
     \\Options:
-    \\  -m "#", --marker '//'  Remove lines starting with this marker - (double) quotes not mandatory
+    \\  --normal               Sets diffing mode to normal (default)
+    \\  --color                Applies colors to diff output if stdout is TTY
+    \\  -m "#", --marker '//'  Remove lines starting with this marker;
+    \\                           (double) quotes not mandatory
+    \\    
     \\  -s, --skip-empty       Remove empty lines from comparison
-    \\  -p, --print            Prints the files without comparison
-    \\  -n, --normal           Sets diffing mode to normal (default)
+    \\  -p, --print            Prints the files without comparison;
+    \\                           includes header with filename and EOF footer
+    \\                           if stdout is not TTY, remove colors
+    \\
     \\  -u, --unified          Sets diffing mode to unified
     \\  -h, --help             Show this help message
     \\
 ;
+fn isStdoutTTY() bool {
+    return std.posix.isatty(1);
+}
 
 /// Entry point of the program
 pub fn main() !void {
@@ -33,6 +42,7 @@ pub fn main() !void {
     var skip_flag = false;
     var print_only = false;
     var mode: []const u8 = "normal";
+    var colo: helpers.ColorMode = .never;
 
     // Parse CLI flags
     var i: usize = 1;
@@ -53,7 +63,11 @@ pub fn main() !void {
             mode = "unified";
             i += 1;
         } else if (std.mem.eql(u8, arg, "-p") or std.mem.eql(u8, arg, "--print")) {
+            colo = if (isStdoutTTY()) .auto else .never;
             print_only = true;
+            i += 1;
+        } else if (std.mem.eql(u8, arg, "--color")) {
+            colo = if (isStdoutTTY()) .auto else .never;
             i += 1;
         } else if (std.mem.eql(u8, arg, "--normal")) {
             mode = "normal";
@@ -62,6 +76,9 @@ pub fn main() !void {
             break;
         }
     }
+
+    const paint = helpers.Colors.paint(colo);
+    var printer = helpers.Printer.init(stdout, paint);
 
     const remaining = args.len - i;
     if (remaining != 2) {
@@ -84,11 +101,31 @@ pub fn main() !void {
     else
         buffers.lines2;
 
+    const processed = if (marker_flag or skip_flag) "Processed " else "";
+
     if (print_only) {
-        try stdout.print("Processed File 1 ({s}):\n", .{path1});
-        for (cleaned1) |line| try stdout.print("{s}\n", .{line});
-        try stdout.print("Processed File 2 ({s}):\n", .{path2});
-        for (cleaned2) |line| try stdout.print("{s}\n", .{line});
+        //FILE 1
+        try stdout.print("{s}{s}File 1 ({s}):{s}\n", .{ paint.header, processed, path1, paint.reset });
+        for (cleaned1[0 .. cleaned1.len - 1]) |line| try stdout.print("{s}\n", .{line});
+        const last1 = cleaned1[cleaned1.len - 1];
+        if (last1.len == 0) {
+            // Last line is empty -> show EOF instead
+            try stdout.print("{s}EOF{s}\n", .{ paint.header, paint.reset });
+        } else {
+            try stdout.print("{s}\n", .{last1});
+            try stdout.print("{s}EOF{s}\n", .{ paint.header, paint.reset });
+        }
+        //FILE 2
+        try stdout.print("{s}{s}File 2 ({s}):{s}\n", .{ paint.header, processed, path2, paint.reset });
+        for (cleaned2[0 .. cleaned2.len - 1]) |line| try stdout.print("{s}\n", .{line});
+        const last2 = cleaned2[cleaned2.len - 1];
+        if (last2.len == 0) {
+            // Last line is empty -> show EOF instead
+            try stdout.print("{s}EOF{s}\n", .{ paint.header, paint.reset });
+        } else {
+            try stdout.print("{s}\n", .{last2});
+            try stdout.print("{s}EOF{s}\n", .{ paint.header, paint.reset });
+        }
         return;
     }
 
@@ -109,6 +146,7 @@ pub fn main() !void {
         cleaned1,
         cleaned2,
         mode,
+        &printer,
         true,
     );
 }
