@@ -49,14 +49,14 @@ pub fn main() !void {
         } else if (std.mem.eql(u8, arg, "-s") or std.mem.eql(u8, arg, "--skip-empty")) {
             skip_flag = true;
             i += 1;
-        } else if (std.mem.eql(u8, arg, "-n") or std.mem.eql(u8, arg, "--normal")) {
-            mode = "normal";
-            i += 1;
         } else if (std.mem.eql(u8, arg, "-u") or std.mem.eql(u8, arg, "--unified")) {
             mode = "unified";
             i += 1;
         } else if (std.mem.eql(u8, arg, "-p") or std.mem.eql(u8, arg, "--print")) {
             print_only = true;
+            i += 1;
+        } else if (std.mem.eql(u8, arg, "--normal")) {
+            mode = "normal";
             i += 1;
         } else {
             break;

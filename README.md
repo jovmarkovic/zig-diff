@@ -31,11 +31,17 @@ zig run src/main.zig -- [options] <file1> <file2>
 
 ### Options
 
+* `--normal`
+  GNU normal diff style. (DEFAULT)
+
 * `-m "#"`, `--marker '//'`
   Remove lines starting with specific marker - (double) quotes optional.
 
 * `-s`, `--skip-empty`
   Skip empty or whitespace-only lines from comparison.
+
+* `-u`, `--unified`
+  GNU unified diff style (default 3) lines of context with hunk merging. - WIP
 
 * `-p`, `--print`
   Prints the output of two files with optional processing and skips comparison.
@@ -45,17 +51,17 @@ zig run src/main.zig -- [options] <file1> <file2>
 
 ---
 
-### Examples
+### Examples - run with out compiling
 
 ```sh
 # Compare two files normally
 zig run src/main.zig -- testfile1 testfile2
 
-# Ignore lines starting with "#"
+# Ignore lines starting with "#" and compare
 zig run src/main.zig -- -m "#" testfile1 testfile2
 
-# Ignore empty lines and lines starting with '//'
-zig run src/main.zig -- -m '//' -s testfile1 testfile2
+# Ignore empty lines and lines starting with '//', just print
+zig run src/main.zig -- -m '//' -s -p testfile1 testfile2
 ```
 
 ---

@@ -2,23 +2,31 @@ const std = @import("std");
 const DiffOp = @import("backtrack.zig").DiffOp;
 const Operation = @import("backtrack.zig").Operation;
 
+/// The output mode for the diff printer:
+/// - Normal  → traditional `diff` style (`aN`, `dN`, `cN` commands).
+/// - Unified → modern unified diff (`@@ -l,r +l,r @@` blocks with +/−).
 pub const DiffMode = enum {
     Normal,
     Unified,
 };
 
+/// Wrapper for a diff operation with an extra `is_context` flag.
+/// Context lines are unchanged lines kept around changes (for unified diff).
 const UnifiedLine = struct {
     op: DiffOp,
     is_context: bool,
 };
 
+/// A printer that takes diff operations (`DiffOp`) and prints them in
+/// either unified or normal format.
 pub const DiffPrinter = struct {
-    allocator: std.mem.Allocator,
-    stdout: std.fs.File.Writer,
-    a: []const []const u8,
-    b: []const []const u8,
-    mode: DiffMode,
+    allocator: std.mem.Allocator, // memory allocator
+    stdout: std.fs.File.Writer, // output writer (usually stdout)
+    a: []const []const u8, // original file lines
+    b: []const []const u8, // new file lines
+    mode: DiffMode, // chosen diff printing mode
 
+    /// Initialize a new printer instance.
     pub fn init(
         allocator: std.mem.Allocator,
         a: []const []const u8,
@@ -33,6 +41,8 @@ pub const DiffPrinter = struct {
             .mode = mode,
         };
     }
+
+    /// Print the diff according to the selected mode.
     pub fn print(self: *DiffPrinter, diffs: []const DiffOp) !void {
         return switch (self.mode) {
             .Unified => self.printUnified(diffs),
@@ -40,7 +50,7 @@ pub const DiffPrinter = struct {
         };
     }
 
-    // Helper to print ranges in GNU diff style
+    /// Helper: format a line range as a string (e.g. `3` or `3,5`).
     fn rangeStr(allocator: std.mem.Allocator, start: usize, end: usize) ![]u8 {
         if (start == end) {
             return try std.fmt.allocPrint(allocator, "{}", .{start});
@@ -49,12 +59,13 @@ pub const DiffPrinter = struct {
         }
     }
 
+    /// Print a unified diff. Groups edits into "hunks" with `context` lines.
     fn printUnified(self: *DiffPrinter, diffs: []const DiffOp) !void {
-        const context = 3;
+        const context = 3; // number of context lines around changes
         var buffer = std.ArrayList(UnifiedLine).init(self.allocator);
         defer buffer.deinit();
 
-        // Buffer all lines with context flag
+        // Convert diff operations into UnifiedLine (with context marking).
         for (diffs) |diff| {
             const is_context = diff.op == .Keep;
             try buffer.append(.{ .op = diff, .is_context = is_context });
@@ -62,16 +73,16 @@ pub const DiffPrinter = struct {
 
         var i: usize = 0;
         while (i < buffer.items.len) {
-            // Skip leading context lines not near changes
+            // Skip pure context sections (unchanged lines far from edits).
             if (buffer.items[i].is_context) {
                 i += 1;
                 continue;
             }
 
-            // Start hunk context lines before the first change line
+            // Start hunk: include some leading context before first change.
             const hunk_start = if (i >= context) i - context else 0;
 
-            // Find end of hunk, including trailing context
+            // Expand hunk forward to include trailing context after changes.
             var hunk_end = i + 1;
             var last_change = i;
 
@@ -79,30 +90,35 @@ pub const DiffPrinter = struct {
                 if (!buffer.items[hunk_end].is_context)
                     last_change = hunk_end;
 
+                // If the last change is past context (default case lines 3),
+                // check if there’s another nearby change (context times 2), merge.
                 if (hunk_end > last_change + context) {
                     var j = hunk_end;
+                    // Increment hunk end while context lines are found.
                     while (j < buffer.items.len and buffer.items[j].is_context) : (j += 1) {}
                     if (j == buffer.items.len or j - (last_change + 1) > 2 * context)
-                        break;
+                        break; // stop this hunk - hunk_end is either at the end or next change is too far.
 
-                    hunk_end = j;
+                    hunk_end = j; // extend hunk to next change
                     continue;
                 }
                 hunk_end += 1;
             }
 
+            // Print this hunk
             try self.printUnifiedHunk(buffer.items[hunk_start..hunk_end]);
-            i = hunk_end;
+            i = hunk_end; // move to next
         }
     }
 
+    /// Print a single unified diff hunk with `@@ -l,r +l,r @@` header.
     fn printUnifiedHunk(self: *DiffPrinter, buffer: []const UnifiedLine) !void {
         var min_orig: usize = std.math.maxInt(usize);
         var max_orig: usize = 0;
         var min_new: usize = std.math.maxInt(usize);
         var max_new: usize = 0;
 
-        // Find min/max line numbers
+        // Determine affected line ranges in both original and new file.
         for (buffer) |entry| {
             switch (entry.op.op) {
                 .Keep => {
@@ -128,7 +144,7 @@ pub const DiffPrinter = struct {
         const has_orig = min_orig != std.math.maxInt(usize);
         const has_new = min_new != std.math.maxInt(usize);
 
-        // Unified diff ranges are 1-based; 0 length allowed
+        // Compute unified diff header ranges (1-based indexing).
         var orig_start: usize = 0;
         var orig_len: usize = 0;
         var new_start: usize = 0;
@@ -143,9 +159,10 @@ pub const DiffPrinter = struct {
             new_len = max_new - min_new + 1;
         }
 
+        // Print hunk header.
         try self.stdout.print("@@ -{d},{d} +{d},{d} @@\n", .{ orig_start, orig_len, new_start, new_len });
 
-        // Print lines with prefix
+        // Print hunk lines with prefixes: ' ' (Keep), '-' (Delete), '+' (Insert).
         for (buffer) |entry| {
             const line: []const u8 = switch (entry.op.op) {
                 .Keep => self.a[entry.op.orig_line],
@@ -161,10 +178,12 @@ pub const DiffPrinter = struct {
         }
     }
 
+    /// Print a normal diff (traditional style with `a/d/c` commands).
     fn printNormal(self: *DiffPrinter, diffs: []const DiffOp) !void {
         var hunk = std.ArrayList(DiffOp).init(self.allocator);
         defer hunk.deinit();
 
+        // Group changes into hunks (separated by Keep ops).
         for (diffs) |diff| {
             switch (diff.op) {
                 .Keep => {
@@ -177,13 +196,19 @@ pub const DiffPrinter = struct {
         if (hunk.items.len > 0) try self.printNormalHunk(hunk.items);
     }
 
+    /// Print a single normal diff hunk in GNU diff format.
+    /// Example:
+    ///   3c3
+    ///   < old line
+    ///   ---
+    ///   > new line
     fn printNormalHunk(self: *DiffPrinter, ops: []const DiffOp) !void {
         var min_orig: usize = std.math.maxInt(usize);
         var max_orig: usize = 0;
         var min_new: usize = std.math.maxInt(usize);
         var max_new: usize = 0;
 
-        // Find min/max line numbers in original and new files, ignoring Inserts or Deletes accordingly
+        // Determine affected ranges in original/new files.
         for (ops) |op| {
             if (op.op != .Insert) {
                 min_orig = @min(min_orig, op.orig_line);
@@ -201,38 +226,27 @@ pub const DiffPrinter = struct {
 
         var cmd: []const u8 = "?";
 
-        // Ranges in GNU diff are 1-based
+        // Build command line: a (add), d (delete), c (change).
         var orig_start: usize = 0;
         var orig_end: usize = 0;
         var new_start: usize = 0;
         var new_end: usize = 0;
 
         if (has_orig and has_new) {
-            // Change
-            cmd = "c";
+            cmd = "c"; // change
             orig_start = min_orig + 1;
             orig_end = max_orig + 1;
             new_start = min_new + 1;
             new_end = max_new + 1;
         } else if (has_orig and !has_new) {
-            // Delete
-            cmd = "d";
+            cmd = "d"; // delete
             orig_start = min_orig + 1;
             orig_end = max_orig + 1;
-            if (min_orig == 0) {
-                new_start = 0; // deletion before first line of new file
-            } else {
-                new_start = min_orig; // delete after this line in new file (1-based)
-            }
+            new_start = if (min_orig == 0) 0 else min_orig;
             new_end = new_start;
         } else if (!has_orig and has_new) {
-            // Add
-            cmd = "a";
-            if (min_new == 0) {
-                orig_start = 0; // insert before first line
-            } else {
-                orig_start = min_new; // insert after this line in old file
-            }
+            cmd = "a"; // add
+            orig_start = if (min_new == 0) 0 else min_new;
             orig_end = orig_start;
             new_start = min_new + 1;
             new_end = max_new + 1;
@@ -244,10 +258,10 @@ pub const DiffPrinter = struct {
         const new_range = try rangeStr(self.allocator, new_start, new_end);
         defer self.allocator.free(new_range);
 
-        // Print command line
+        // Print command header line.
         try self.stdout.print("{s}{s}{s}\n", .{ orig_range, cmd, new_range });
 
-        // Print deleted lines (<) for delete or change
+        // Print deleted lines (<) for delete/change
         if (std.mem.eql(u8, cmd, "d") or std.mem.eql(u8, cmd, "c")) {
             for (ops) |op| {
                 if (op.op == .Delete) {
@@ -256,12 +270,12 @@ pub const DiffPrinter = struct {
             }
         }
 
-        // For change, print separator
+        // Print separator for change
         if (std.mem.eql(u8, cmd, "c")) {
             try self.stdout.print("---\n", .{});
         }
 
-        // Print inserted lines (>) for add or change
+        // Print inserted lines (>) for add/change
         if (std.mem.eql(u8, cmd, "a") or std.mem.eql(u8, cmd, "c")) {
             for (ops) |op| {
                 if (op.op == .Insert) {
