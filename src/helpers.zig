@@ -48,35 +48,17 @@ pub const Printer = struct {
         };
     }
 
-    /// Prints a line with an optional prefix and color.
-    /// - `prefix`: One or more characters to print before the line (e.g., `<`, `>`).
-    /// - `line`: The line content.
+    /// Prints a formatted string with color applied if enabled.
+    /// - `fmt` and `args`: Like `std.io.Writer.print` format string and arguments.
     /// - `color`: ANSI escape sequence to use, or empty to disable coloring.
-    pub fn printLine(
+    pub fn printColor(
         self: *Printer,
-        prefix: []const u8,
-        line: []const u8,
+        comptime fmt: []const u8,
+        args: anytype,
         color: []const u8,
     ) !void {
-        if (color.len > 0) {
-            try self.writer.print("{s}{s}{s}{s}\n", .{
-                color,
-                prefix,
-                line,
-                self.colors.reset,
-            });
-        } else {
-            try self.writer.print("{s}{s}\n", .{ prefix, line });
-        }
-    }
-
-    /// Prints a formatted header with color applied if enabled.
-    /// - `fmt` and `args`: Like `std.io.Writer.print` format string and arguments.
-    pub fn printHeader(self: *Printer, comptime fmt: []const u8, args: anytype) !void {
         if (self.colors.header.len > 0) {
-            try self.writer.print("{s}", .{self.colors.header});
-            try self.writer.print(fmt, args);
-            try self.writer.print("{s}", .{self.colors.reset});
+            try self.writer.print("{s}" ++ fmt ++ "{s}", .{color} ++ args ++ .{self.colors.reset});
         } else {
             try self.writer.print(fmt, args);
         }

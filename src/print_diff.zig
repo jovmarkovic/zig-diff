@@ -164,7 +164,11 @@ pub const DiffPrinter = struct {
         }
 
         // Print hunk header.
-        try self.printer.printHeader("@@ -{d},{d} +{d},{d} @@\n", .{ orig_start, orig_len, new_start, new_len });
+        try self.printer.printColor(
+            "@@ -{d},{d} +{d},{d} @@\n",
+            .{ orig_start, orig_len, new_start, new_len },
+            self.printer.colors.header,
+        );
 
         // Print hunk lines with prefixes: ' ' (Keep), '-' (Delete), '+' (Insert).
         for (buffer) |entry| {
@@ -173,19 +177,19 @@ pub const DiffPrinter = struct {
                 .Delete => self.a[entry.op.orig_line],
                 .Insert => self.b[@as(usize, @intCast(entry.op.new_line))],
             };
-            const prefix: []const u8 = switch (entry.op.op) {
-                .Keep => " ",
-                .Delete => "-",
-                .Insert => "+",
+            const prefix: u8 = switch (entry.op.op) {
+                .Keep => ' ',
+                .Delete => '-',
+                .Insert => '+',
             };
-            //try self.std.print("{c}{s}\n", .{ prefix, line });
-            try self.printer.printLine(
-                prefix,
-                line,
-                switch (prefix[0]) {
+            try self.printer.printColor(
+                ".{c} {s}\n",
+                .{ prefix, line },
+                switch (prefix) {
+                    ' ' => self.printer.colors.reset,
                     '+' => self.printer.colors.insert,
                     '-' => self.printer.colors.delete,
-                    else => self.printer.colors.reset,
+                    else => unreachable,
                 },
             );
         }
@@ -272,15 +276,19 @@ pub const DiffPrinter = struct {
         defer self.allocator.free(new_range);
 
         // Print command header line.
-        try self.printer.printHeader("{s}{s}{s}\n", .{ orig_range, cmd, new_range });
+        try self.printer.printColor(
+            "{s}{s}{s}\n",
+            .{ orig_range, cmd, new_range },
+            self.printer.colors.header,
+        );
 
         // Print deleted lines (<) for delete/change
         if (std.mem.eql(u8, cmd, "d") or std.mem.eql(u8, cmd, "c")) {
             for (ops) |op| {
                 if (op.op == .Delete) {
-                    try self.printer.printLine(
-                        "< ",
-                        self.a[op.orig_line],
+                    try self.printer.printColor(
+                        "{c} {s}\n",
+                        .{ '<', self.a[op.orig_line] },
                         self.printer.colors.delete,
                     );
                 }
@@ -296,9 +304,9 @@ pub const DiffPrinter = struct {
         if (std.mem.eql(u8, cmd, "a") or std.mem.eql(u8, cmd, "c")) {
             for (ops) |op| {
                 if (op.op == .Insert) {
-                    try self.printer.printLine(
-                        "> ",
-                        self.b[@as(usize, @intCast(op.new_line))],
+                    try self.printer.printColor(
+                        "{c} {s}\n",
+                        .{ '>', self.b[@as(usize, @intCast(op.new_line))] },
                         self.printer.colors.insert,
                     );
                 }
