@@ -64,7 +64,7 @@ pub const Printer = struct {
         }
     }
 
-    /// Prints formatted output without any additional prefix or color.
+    /// Prints formatted output without any color.
     pub fn printRaw(self: *Printer, comptime fmt: []const u8, args: anytype) !void {
         try self.writer.print(fmt, args);
     }

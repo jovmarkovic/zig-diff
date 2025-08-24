@@ -91,17 +91,17 @@ pub fn main() !void {
 
     const buffers = try helpers.readTwoFiles(allocator, path1, path2);
 
-    const cleaned1 = if (marker_flag or skip_flag)
+    const processed = if (marker_flag or skip_flag) "Processed " else "";
+
+    const cleaned1 = if (processed.len > 0)
         try rm.removeMarkedLines(allocator, buffers.lines1, marker, skip_flag)
     else
         buffers.lines1;
 
-    const cleaned2 = if (marker_flag or skip_flag)
+    const cleaned2 = if (processed.len > 0)
         try rm.removeMarkedLines(allocator, buffers.lines2, marker, skip_flag)
     else
         buffers.lines2;
-
-    const processed = if (marker_flag or skip_flag) "Processed " else "";
 
     if (print_only) {
         //FILE 1
