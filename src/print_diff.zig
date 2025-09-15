@@ -183,7 +183,7 @@ pub const DiffPrinter = struct {
                 .Insert => '+',
             };
             try self.printer.printColor(
-                ".{c} {s}\n",
+                "{c} {s}\n",
                 .{ prefix, line },
                 switch (prefix) {
                     ' ' => self.printer.colors.reset,
