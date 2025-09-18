@@ -76,8 +76,9 @@ pub fn trackDiff(
     var prev_y: isize = 0;
 
     // List to accumulate diff operations while backtracking
-    var diffs = std.ArrayList(DiffOp).init(allocator);
-    diffs.deinit();
+    // var diffs = try std.ArrayList(DiffOp).initCapacity(allocator, a.len + b.len);
+    var diffs: std.ArrayList(DiffOp) = .empty;
+    defer diffs.deinit(allocator);
 
     // Main backtracking loop from the end of the trace to the beginning
     while (d >= 0) : (d -= 1) {
@@ -111,7 +112,7 @@ pub fn trackDiff(
             x -= 1;
             y -= 1;
 
-            try diffs.append(.{
+            try diffs.append(allocator, .{
                 .op = Operation.Keep,
                 .orig_line = x,
                 .new_line = y,
@@ -123,7 +124,7 @@ pub fn trackDiff(
             // Insert operation: line inserted in b at position y-1
             y -= 1;
             if (y >= 0) {
-                try diffs.append(.{
+                try diffs.append(allocator, .{
                     .op = Operation.Insert,
                     .orig_line = x, // Usually the unchanged line before insert
                     .new_line = y,
@@ -132,7 +133,7 @@ pub fn trackDiff(
         } else if (y == prev_y) {
             // Delete operation: line deleted from a at position x-1
             x -= 1;
-            try diffs.append(.{
+            try diffs.append(allocator, .{
                 .op = Operation.Delete,
                 .orig_line = x,
                 .new_line = y, // Position in new sequence before delete

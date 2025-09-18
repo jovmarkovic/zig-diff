@@ -25,8 +25,8 @@ pub fn removeMarkedLines(
     marker: []const u8,
     skipEmptyLines: bool,
 ) ![]const []const u8 {
-    var lines_out = std.ArrayList([]const u8).init(allocator);
-    defer lines_out.deinit();
+    var lines_out: std.ArrayList([]const u8) = .empty;
+    defer lines_out.deinit(allocator);
 
     for (lines_in, 0..) |line, i| {
         const trimmed_left = std.mem.trimLeft(u8, line, " \t");
@@ -39,8 +39,8 @@ pub fn removeMarkedLines(
             continue;
         }
 
-        try lines_out.append(line);
+        try lines_out.append(allocator, line);
     }
 
-    return lines_out.toOwnedSlice();
+    return lines_out.toOwnedSlice(allocator);
 }

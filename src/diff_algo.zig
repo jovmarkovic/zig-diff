@@ -36,7 +36,7 @@ pub fn myersDiff(
     ctx: ?*anyopaque,
     compare: fn (ctx: ?*anyopaque, usize, usize) bool,
 ) !Trace {
-    var trace = Trace.init(allocator);
+    var trace: Trace = .empty;
     // Defer trace.deinit() is ran from fn main
 
     // Maximum number of steps needed (worst case: delete all a_len lines + insert all b_len lines)
@@ -61,7 +61,7 @@ pub fn myersDiff(
     while (d <= max_d) : (d += 1) {
         // Make a copy of vector V at current d and save in trace for backtracking
         const v_copy = try allocator.dupe(usize, v);
-        try trace.append(v_copy);
+        try trace.append(allocator, v_copy);
 
         // For each diagonal k in [-d, d], stepping by 2 (only odd or even k at each d)
         var k: isize = -@as(isize, @intCast(d));

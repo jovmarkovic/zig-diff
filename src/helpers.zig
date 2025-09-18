@@ -37,7 +37,8 @@ pub const Colors = struct {
 
 /// Helper struct for printing diff output with optional colors.
 pub const Printer = struct {
-    writer: @TypeOf(std.io.getStdOut().writer()), // Output writer (usually stdout)
+    // writer: @TypeOf(std.io.getStdOut().writer()), // Output writer (usually stdout)
+    writer: *std.Io.Writer, // Output writer (usually stdout)
     colors: Colors, // Colors to use for printing
 
     /// Initializes a `Printer` with a writer and color settings.
@@ -68,6 +69,10 @@ pub const Printer = struct {
     pub fn printRaw(self: *Printer, comptime fmt: []const u8, args: anytype) !void {
         try self.writer.print(fmt, args);
     }
+    /// Flush the buffer when done printing a block
+    pub fn flush(self: *Printer) !void {
+        try self.writer.flush();
+    }
 };
 
 /// Holds slices of lines from two files for comparison.
@@ -94,8 +99,30 @@ pub const EqlContext = struct {
 /// - `i`, `j`: Line indices.
 /// Returns `true` if lines are equal.
 pub fn eql(ctx: ?*anyopaque, i: usize, j: usize) bool {
-    const eql_ctx: *EqlContext = @alignCast(@ptrCast(ctx.?));
+    const eql_ctx: *EqlContext = @ptrCast(@alignCast(ctx.?));
     return eql_ctx.compare(i, j);
+}
+
+/// Reads all bytes from a reader up to `size`, returning a buffer.
+/// - `allocator`: Memory allocator that stores a buffer.
+/// `R` must implement `read([]u8) !usize`.
+/// Returns a buffer of data.
+pub fn readToEndAlloc(
+    comptime R: type,
+    allocator: std.mem.Allocator,
+    reader: *const R,
+    size: usize,
+) ![]u8 {
+    const buf = try allocator.alloc(u8, size);
+    var used: usize = 0;
+
+    while (used < size) {
+        const n = try reader.read(buf[used..]);
+        if (n == 0) break;
+        used += n;
+    }
+
+    return buf[0..used];
 }
 
 /// Reads two files and splits them into line slices.
@@ -117,8 +144,8 @@ pub fn readTwoFiles(
     const size2 = stat2.size;
     defer file2.close();
 
-    const buf1 = try file1.readToEndAlloc(allocator, size1);
-    const buf2 = try file2.readToEndAlloc(allocator, size2);
+    const buf1 = try readToEndAlloc(std.fs.File, allocator, &file1, @intCast(size1));
+    const buf2 = try readToEndAlloc(std.fs.File, allocator, &file2, @intCast(size2));
 
     const lines1 = try collectLines(allocator, buf1);
     const lines2 = try collectLines(allocator, buf2);
@@ -131,15 +158,15 @@ pub fn readTwoFiles(
 /// - `buffer`: The input file buffer.
 /// Returns: array of line slices.
 pub fn collectLines(allocator: std.mem.Allocator, buffer: []const u8) ![]const []const u8 {
-    var lines = std.ArrayList([]const u8).init(allocator);
-    defer lines.deinit();
+    var lines: std.ArrayList([]const u8) = .empty;
+    defer lines.deinit(allocator);
 
     var iter = std.mem.splitScalar(u8, buffer, '\n');
     while (iter.next()) |line| {
-        try lines.append(line);
+        try lines.append(allocator, line);
     }
 
-    return lines.toOwnedSlice();
+    return lines.toOwnedSlice(allocator);
 }
 
 /// Strips surrounding quotes from a string (single `'` or double `"`).

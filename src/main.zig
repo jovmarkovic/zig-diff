@@ -32,7 +32,9 @@ pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
-    var stdout = std.io.getStdOut().writer();
+    var stdout_buffer: [8192]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    var stdout = &stdout_writer.interface;
 
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
@@ -51,6 +53,7 @@ pub fn main() !void {
 
         if (std.mem.eql(u8, arg, "-h") or std.mem.eql(u8, arg, "--help")) {
             try stdout.print(help_msg, .{args[0]});
+            try stdout.flush();
             return;
         } else if (std.mem.eql(u8, arg, "-m") or std.mem.eql(u8, arg, "--marker")) {
             marker_flag = true;
@@ -83,6 +86,7 @@ pub fn main() !void {
     const remaining = args.len - i;
     if (remaining != 2) {
         try stdout.print("Usage: {s} [-m <marker>] [-s] <file1> <file2>\n", .{args[0]});
+        try stdout.flush();
         return error.InvalidArgs;
     }
 
@@ -107,38 +111,44 @@ pub fn main() !void {
         //FILE 1
         try stdout.print("{s}{s}File 1 ({s}):{s}\n", .{ paint.header, processed, path1, paint.reset });
         for (cleaned1[0 .. cleaned1.len - 1]) |line| try stdout.print("{s}\n", .{line});
+        try stdout.flush();
         const last1 = cleaned1[cleaned1.len - 1];
         if (last1.len == 0) {
             // Last line is empty -> show EOF instead
             try stdout.print("{s}EOF{s}\n", .{ paint.header, paint.reset });
+            try stdout.flush();
         } else {
             try stdout.print("{s}\n", .{last1});
             try stdout.print("{s}EOF{s}\n", .{ paint.header, paint.reset });
+            try stdout.flush();
         }
         //FILE 2
         try stdout.print("{s}{s}File 2 ({s}):{s}\n", .{ paint.header, processed, path2, paint.reset });
         for (cleaned2[0 .. cleaned2.len - 1]) |line| try stdout.print("{s}\n", .{line});
+        try stdout.flush();
         const last2 = cleaned2[cleaned2.len - 1];
         if (last2.len == 0) {
             // Last line is empty -> show EOF instead
             try stdout.print("{s}EOF{s}\n", .{ paint.header, paint.reset });
+            try stdout.flush();
         } else {
             try stdout.print("{s}\n", .{last2});
             try stdout.print("{s}EOF{s}\n", .{ paint.header, paint.reset });
+            try stdout.flush();
         }
         return;
     }
 
     var eql_ctx = helpers.EqlContext{ .f1 = cleaned1, .f2 = cleaned2 };
 
-    const trace = try diff_algo.myersDiff(
+    var trace = try diff_algo.myersDiff(
         allocator,
         cleaned1.len,
         cleaned2.len,
         &eql_ctx,
         helpers.eql,
     );
-    defer trace.deinit();
+    defer trace.deinit(allocator);
 
     try trackDiff(
         allocator,

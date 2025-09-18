@@ -38,7 +38,6 @@ pub const DiffPrinter = struct {
     ) DiffPrinter {
         return DiffPrinter{
             .allocator = allocator,
-            //.stdout = std.io.getStdOut().writer(),
             .a = a,
             .b = b,
             .mode = mode,
@@ -66,13 +65,13 @@ pub const DiffPrinter = struct {
     /// Print a unified diff. Groups edits into "hunks" with `context` lines.
     fn printUnified(self: *DiffPrinter, diffs: []const DiffOp) !void {
         const context = 3; // number of context lines around changes
-        var buffer = std.ArrayList(UnifiedLine).init(self.allocator);
-        defer buffer.deinit();
+        var buffer: std.ArrayList(UnifiedLine) = .empty;
+        defer buffer.deinit(self.allocator);
 
         // Convert diff operations into UnifiedLine (with context marking).
         for (diffs) |diff| {
             const is_context = diff.op == .Keep;
-            try buffer.append(.{ .op = diff, .is_context = is_context });
+            try buffer.append(self.allocator, .{ .op = diff, .is_context = is_context });
         }
 
         var i: usize = 0;
@@ -193,12 +192,13 @@ pub const DiffPrinter = struct {
                 },
             );
         }
+        try self.printer.flush();
     }
 
     /// Print a normal diff (traditional style with `a/d/c` commands).
     fn printNormal(self: *DiffPrinter, diffs: []const DiffOp) !void {
-        var hunk = std.ArrayList(DiffOp).init(self.allocator);
-        defer hunk.deinit();
+        var hunk: std.ArrayList(DiffOp) = .empty;
+        defer hunk.deinit(self.allocator);
 
         // Group changes into hunks (separated by Keep ops).
         for (diffs) |diff| {
@@ -207,10 +207,11 @@ pub const DiffPrinter = struct {
                     if (hunk.items.len > 0) try self.printNormalHunk(hunk.items);
                     hunk.clearRetainingCapacity();
                 },
-                .Insert, .Delete => try hunk.append(diff),
+                .Insert, .Delete => try hunk.append(self.allocator, diff),
             }
         }
         if (hunk.items.len > 0) try self.printNormalHunk(hunk.items);
+        try self.printer.flush();
     }
 
     /// Print a single normal diff hunk in GNU diff format.
@@ -293,6 +294,7 @@ pub const DiffPrinter = struct {
                     );
                 }
             }
+            try self.printer.flush();
         }
 
         // Print separator for change
@@ -311,6 +313,7 @@ pub const DiffPrinter = struct {
                     );
                 }
             }
+            try self.printer.flush();
         }
     }
 };
