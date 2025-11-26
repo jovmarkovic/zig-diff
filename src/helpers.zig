@@ -37,7 +37,6 @@ pub const Colors = struct {
 
 /// Helper struct for printing diff output with optional colors.
 pub const Printer = struct {
-    // writer: @TypeOf(std.io.getStdOut().writer()), // Output writer (usually stdout)
     writer: *std.Io.Writer, // Output writer (usually stdout)
     colors: Colors, // Colors to use for printing
 
@@ -78,7 +77,7 @@ pub const Printer = struct {
 /// Holds slices of lines from two files for comparison.
 pub const FileBuffers = struct {
     lines1: []const []const u8, // Lines from first file
-    lines2: []const []const u8, // Lines from second file
+    lines2: ?[]const []const u8 = null, // Lines from second file
 };
 
 /// Context used for comparing lines between two file buffers.
@@ -132,25 +131,27 @@ pub fn readToEndAlloc(
 pub fn readTwoFiles(
     allocator: std.mem.Allocator,
     path1: []const u8,
-    path2: []const u8,
+    path2: ?[]const u8,
 ) !FileBuffers {
     const file1 = try std.fs.cwd().openFile(path1, .{ .mode = .read_only });
     const stat1 = try file1.stat();
     const size1 = stat1.size;
     defer file1.close();
-
-    const file2 = try std.fs.cwd().openFile(path2, .{ .mode = .read_only });
-    const stat2 = try file2.stat();
-    const size2 = stat2.size;
-    defer file2.close();
-
     const buf1 = try readToEndAlloc(std.fs.File, allocator, &file1, @intCast(size1));
-    const buf2 = try readToEndAlloc(std.fs.File, allocator, &file2, @intCast(size2));
-
     const lines1 = try collectLines(allocator, buf1);
-    const lines2 = try collectLines(allocator, buf2);
 
-    return FileBuffers{ .lines1 = lines1, .lines2 = lines2 };
+    // Unwrap path2 optional and use it
+    if (path2) |path| {
+        const file2 = try std.fs.cwd().openFile(path, .{ .mode = .read_only });
+        const stat2 = try file2.stat();
+        const size2 = stat2.size;
+        defer file2.close();
+        const buf2 = try readToEndAlloc(std.fs.File, allocator, &file2, @intCast(size2));
+        const lines2 = try collectLines(allocator, buf2);
+        return FileBuffers{ .lines1 = lines1, .lines2 = lines2 };
+    }
+
+    return FileBuffers{ .lines1 = lines1 };
 }
 
 /// Splits a buffer into lines based on '\n'.

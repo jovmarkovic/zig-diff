@@ -6,7 +6,7 @@ const helpers = @import("helpers.zig");
 
 /// Help message displayed with -h
 const help_msg =
-    \\Usage: {s} [options] <file1> <file2>
+    \\Usage: {s} [options] <file1> (<file2>)
     \\
     \\Options:
     \\  --normal               Sets diffing mode to normal (default)
@@ -14,8 +14,12 @@ const help_msg =
     \\  -m "#", --marker '//'  Remove lines starting with this marker;
     \\                           (double) quotes not mandatory
     \\    
-    \\  -s, --skip-empty       Remove empty lines from comparison
+    \\  -s, --skip-empty       Remove empty lines
     \\  -p, --print            Prints the files without comparison;
+    \\                           includes header with filename and EOF footer
+    \\                           if stdout is not TTY, remove colors
+    \\
+    \\  --single-file          Prints out single file used as input
     \\                           includes header with filename and EOF footer
     \\                           if stdout is not TTY, remove colors
     \\
@@ -34,13 +38,14 @@ pub fn main() !void {
     const allocator = arena.allocator();
     var stdout_buffer: [8192]u8 = undefined;
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-    var stdout = &stdout_writer.interface;
+    const stdout = &stdout_writer.interface;
 
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
 
     var marker: []const u8 = "";
     var marker_flag = false;
+    var single_file = false;
     var skip_flag = false;
     var print_only = false;
     var mode: []const u8 = "normal";
@@ -75,23 +80,32 @@ pub fn main() !void {
         } else if (std.mem.eql(u8, arg, "--normal")) {
             mode = "normal";
             i += 1;
+        } else if (std.mem.eql(u8, arg, "--single-file")) {
+            single_file = true;
+            colo = if (isStdoutTTY()) .auto else .never;
+            print_only = true;
+            i += 1;
         } else {
             break;
         }
     }
 
     const paint = helpers.Colors.paint(colo);
-    var printer = helpers.Printer.init(stdout, paint);
 
     const remaining = args.len - i;
-    if (remaining != 2) {
+    if (single_file and remaining != 1) {
+        try stdout.print("Usage: {s} --single-file [-m <marker>] [-s] <file>\n", .{args[0]});
+        try stdout.flush();
+        return error.InvalidArgs;
+    } else if (!single_file and remaining != 2) {
         try stdout.print("Usage: {s} [-m <marker>] [-s] <file1> <file2>\n", .{args[0]});
+        try stdout.print("Usage: {s} --single-file [-m <marker>] [-s] <file>\n", .{args[0]});
         try stdout.flush();
         return error.InvalidArgs;
     }
 
     const path1 = args[i];
-    const path2 = args[i + 1];
+    const path2 = if (single_file) null else args[i + 1];
 
     const buffers = try helpers.readTwoFiles(allocator, path1, path2);
 
@@ -102,14 +116,20 @@ pub fn main() !void {
     else
         buffers.lines1;
 
-    const cleaned2 = if (processed.len > 0)
-        try rm.removeMarkedLines(allocator, buffers.lines2, marker, skip_flag)
+    const cleaned2: ?[]const []const u8 = if (processed.len > 0 and !single_file)
+        try rm.removeMarkedLines(allocator, buffers.lines2.?, marker, skip_flag)
+    else if (!single_file)
+        buffers.lines2.?
     else
-        buffers.lines2;
+        null;
 
     if (print_only) {
         //FILE 1
-        try stdout.print("{s}{s}File 1 ({s}):{s}\n", .{ paint.header, processed, path1, paint.reset });
+        if (single_file) {
+            try stdout.print("{s}{s}File ({s}):{s}\n", .{ paint.header, processed, path1, paint.reset });
+        } else {
+            try stdout.print("{s}{s}File 1 ({s}):{s}\n", .{ paint.header, processed, path1, paint.reset });
+        }
         for (cleaned1[0 .. cleaned1.len - 1]) |line| try stdout.print("{s}\n", .{line});
         try stdout.flush();
         const last1 = cleaned1[cleaned1.len - 1];
@@ -123,40 +143,45 @@ pub fn main() !void {
             try stdout.flush();
         }
         //FILE 2
-        try stdout.print("{s}{s}File 2 ({s}):{s}\n", .{ paint.header, processed, path2, paint.reset });
-        for (cleaned2[0 .. cleaned2.len - 1]) |line| try stdout.print("{s}\n", .{line});
-        try stdout.flush();
-        const last2 = cleaned2[cleaned2.len - 1];
-        if (last2.len == 0) {
-            // Last line is empty -> show EOF instead
-            try stdout.print("{s}EOF{s}\n", .{ paint.header, paint.reset });
+        if (!single_file) {
+            try stdout.print("{s}{s}File 2 ({s}):{s}\n", .{ paint.header, processed, path2.?, paint.reset });
+            for (cleaned2.?[0 .. cleaned2.?.len - 1]) |line| try stdout.print("{s}\n", .{line});
             try stdout.flush();
-        } else {
-            try stdout.print("{s}\n", .{last2});
-            try stdout.print("{s}EOF{s}\n", .{ paint.header, paint.reset });
-            try stdout.flush();
+            const last2 = cleaned2.?[cleaned2.?.len - 1];
+            if (last2.len == 0) {
+                // Last line is empty -> show EOF instead
+                try stdout.print("{s}EOF{s}\n", .{ paint.header, paint.reset });
+                try stdout.flush();
+            } else {
+                try stdout.print("{s}\n", .{last2});
+                try stdout.print("{s}EOF{s}\n", .{ paint.header, paint.reset });
+                try stdout.flush();
+            }
         }
         return;
     }
 
-    var eql_ctx = helpers.EqlContext{ .f1 = cleaned1, .f2 = cleaned2 };
+    if (!single_file) {
+        var printer = helpers.Printer.init(stdout, paint);
+        var eql_ctx = helpers.EqlContext{ .f1 = cleaned1, .f2 = cleaned2.? };
 
-    var trace = try diff_algo.myersDiff(
-        allocator,
-        cleaned1.len,
-        cleaned2.len,
-        &eql_ctx,
-        helpers.eql,
-    );
-    defer trace.deinit(allocator);
+        var trace = try diff_algo.myersDiff(
+            allocator,
+            cleaned1.len,
+            cleaned2.?.len,
+            &eql_ctx,
+            helpers.eql,
+        );
+        defer trace.deinit(allocator);
 
-    try trackDiff(
-        allocator,
-        trace,
-        cleaned1,
-        cleaned2,
-        mode,
-        &printer,
-        true,
-    );
+        try trackDiff(
+            allocator,
+            trace,
+            cleaned1,
+            cleaned2.?,
+            mode,
+            &printer,
+            true,
+        );
+    }
 }
