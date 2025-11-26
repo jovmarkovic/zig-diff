@@ -50,10 +50,12 @@ zgdif --single-file [-m <marker>] [-s] <file>
 
 * `-p`, `--print`
   Prints the output of two files with optional processing and skips comparison;
+  
     includes header with filename and EOF footer, if stdout is not TTY, remove colors.
 
 * `--single-file`
   Prints out single file used as input;
+  
     includes header with filename and EOF footer, if stdout is not TTY, remove colors.
 
 * `-h`, `--help`
